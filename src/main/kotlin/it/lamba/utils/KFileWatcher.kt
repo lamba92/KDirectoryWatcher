@@ -38,7 +38,7 @@ class KDirectoryWatcher(build: Configuration.() -> Unit) {
                 watchKeyToDirectoryMap[key] = it
             }
             while (isActive) {
-                val key = watchService.poll(1, TimeUnit.SECONDS)
+                val key = watchService.take()
                 val dir = watchKeyToDirectoryMap[key] ?: continue
 
                 for (event in key.pollEvents()) {
@@ -66,6 +66,7 @@ class KDirectoryWatcher(build: Configuration.() -> Unit) {
     }
 
     fun stop() = runBlocking {
+        watchService.close()
         job.cancelAndJoin()
     }
 
