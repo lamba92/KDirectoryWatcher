@@ -1,4 +1,4 @@
-# KDirectoryWatcher [![Build Status](https://travis-ci.org/lamba92/kdirectorywatcher.svg?branch=master)](https://travis-ci.org/lamba92/kdirectorywatcher) [![](https://jitpack.io/v/lamba92/kdirectorywatcher.svg)](https://jitpack.io/#lamba92/kdirectorywatcher)
+# KDirectoryWatcher [![Build Status](https://travis-ci.org/lamba92/KDirectoryWatcher.svg?branch=master)](https://travis-ci.org/lamba92/KDirectoryWatcher) [![](https://jitpack.io/v/lamba92/kdirectorywatcher.svg)](https://jitpack.io/#lamba92/kdirectorywatcher)
 
 
 Utility library to monitor changes inside a directory. It is implemented using coroutines and configurations lambda. 
