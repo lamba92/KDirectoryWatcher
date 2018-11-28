@@ -66,8 +66,9 @@ class KDirectoryWatcher(build: Configuration.() -> Unit) {
     }
 
     fun stop() = runBlocking {
+        job.cancel()
         watchService.close()
-        job.cancelAndJoin()
+        job.join()
     }
 
     private fun triggerAlreadyExistent(paths: Iterable<Path>) = paths.forEach {
