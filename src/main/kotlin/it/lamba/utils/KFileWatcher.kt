@@ -86,10 +86,6 @@ class KDirectoryWatcher(build: Configuration.() -> Unit) {
         ENTRY_DELETE
     }
 
-    @DslMarker
-    annotation class ConfigurationMarker
-
-    @ConfigurationMarker
     inner class Configuration {
 
         internal val pathsToWatch = HashSet<Path>()
@@ -101,7 +97,7 @@ class KDirectoryWatcher(build: Configuration.() -> Unit) {
         fun addPath(path: String) = pathsToWatch.add(path.toPath())
         fun addPaths(paths: Iterable<Path>) = pathsToWatch.addAll(paths)
         fun addPaths(paths: Iterable<String>) = paths.forEach { pathsToWatch.add(it.toPath()) }
-        fun addFilter(filter: (Path) -> Boolean) = filters.add(filter)
+        fun addFilter(filter: (path: Path) -> Boolean) = filters.add(filter)
         fun addFilters(filters: Iterable<(Path) -> Boolean>) = this.filters.addAll(filters)
         fun setPreExistingAsCreated(value: Boolean) {
             preExistingAsCreated = value
@@ -109,7 +105,9 @@ class KDirectoryWatcher(build: Configuration.() -> Unit) {
         fun setListener(listener: Listener) {
             this.listener = listener
         }
-
+        fun setListener(listener: (event: Event, path: Path)->Unit) = setListener(object : Listener{
+            override fun onEvent(event: Event, path: Path) = listener(event, path)
+        })
     }
 
 }

@@ -11,13 +11,12 @@ class Tests : KDirectoryWatcher.Listener {
 
     private val workingDir by lazy{ System.getProperty("user.dir") }
 
-    @Test
     fun test(){
         val watcher = KDirectoryWatcher {
             setListener(this@Tests)
             addPath(workingDir.toString() + "/filetests")
             addPaths(emptySet<Path>())
-
+            addFilter { it.endsWith("jpg") }
         }
         watcher.start()
         runBlocking {

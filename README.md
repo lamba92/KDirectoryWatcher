@@ -1,13 +1,50 @@
 # KDirectoryWatcher [![Build Status](https://travis-ci.org/lamba92/kdirectorywatcher.svg?branch=master)](https://travis-ci.org/lamba92/kdirectorywatcher) [![](https://jitpack.io/v/lamba92/kdirectorywatcher.svg)](https://jitpack.io/#lamba92/kdirectorywatcher)
 
 
-Utility library to monitor changes inside a directory. 
+Utility library to monitor changes inside a directory. It is implemented using coroutines and configurations lambda. 
 
+This project is an adaptation of [Hindol](https://github.com/Hindol) / [commons](https://github.com/Hindol/commons) / [DirectoryWatcher](https://github.com/Hindol/commons/blob/master/src/main/java/com/github/hindol/commons/file/DirectoryWatcher.java)
+
+Written in Kotlin with ❤️.
+
+The library is still work in progress. By now it correctly triggers `ENRTY_CREATE` and `ENTRY_DELETE`. The `ENTRY_MODIFY` is triggered many times, as many times as the OS writes on the file (which is technically correct but tedious for developers).
+
+TODO:
+- [ ] Tests!
+- [ ] Add a configurable amount of time between each call with `ENTRY_MODIFY` on the same file
+- [ ] Multiple listeners
+- [ ] Inverse filtering for paths (discarding instead of selecting)
+- [ ] A constructor for the Java peasants
 
 ## Usage
 
+Create a `KDirectoryWatcher` object and register a listener to it using `setListener(listener: Listener)` method inside the `KDirectoryWatcher.Configuration` extension lambda. 
+
+
 ```
 val watcher = KDirectoryWatcher {
+    addPath(System.getProperty("user.dir"))
+    setListener { event, path -> 
+        switch(event){
+            ENRTY_CREATE -> // whatever
+            ENTRY_MODIFY -> // whatever
+            ENTRY_DELETE -> // whatever
+        }     
+    }
+    addFilter { it.endsWith("jpg") }
+}
+
+watcher.start()
+// stuff
+watcher.stop() //may have to wait up to 1 second
+```
+
+Each event is ran in a separated coroutine in default dispatcher (which means don't make thread blocking calls inside the listener, if you have to, delegate it to a coroutine in the IO dispatcher).
+
+Here's all the available configuration methods for now:
+
+```
+KDirectoryWatcher {
     addPath(path: Path)
     addPath(path: String)
     addPaths(paths: Iterable<Path>)
@@ -17,10 +54,9 @@ val watcher = KDirectoryWatcher {
     setPreExistingAsCreated(value: Boolean)
     setListener(listener: Listener)
 }
-watcher.start()
-// stuff
-watcher.stopt() //may have to wait up to 1 second
 ```
+
+A `filter` is a lambda which accepts the path which triggered the change and if it returns true the event wil be processed. You can have many filters, if so the path must satisfy them all.
 
 ## Install [![](https://jitpack.io/v/lamba92/kdirectorywatcher.svg)](https://jitpack.io/#lamba92/kdirectorywatcher)
 
