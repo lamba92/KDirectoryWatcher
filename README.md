@@ -7,12 +7,12 @@ This project is an adaptation of [Hindol](https://github.com/Hindol) / [commons]
 
 Written in Kotlin with ❤️.
 
-The library is still work in progress. By now it correctly triggers `ENRTY_CREATE` and `ENTRY_DELETE`. The `ENTRY_MODIFY` is triggered many times, as many times as the OS writes on the file (which is technically correct but tedious for developers).
+The library is still work in progress. By now it correctly triggers `ENRTY_CREATE` and `ENTRY_DELETE`. ~~The `ENTRY_MODIFY` is triggered many times, as many times as the OS writes on the file (which is technically correct but tedious for developers).~~
 
 TODO:
 - [ ] Tests!
-- [ ] Add a configurable amount of time between each call with `ENTRY_MODIFY` on the same file
-- [ ] Multiple listeners
+- [x] Add a configurable amount of time between each call with `ENTRY_MODIFY` on the same file
+- [x] Multiple listeners
 - [ ] Inverse filtering for paths (discarding instead of selecting)
 - [ ] A constructor for the Java peasants
 
