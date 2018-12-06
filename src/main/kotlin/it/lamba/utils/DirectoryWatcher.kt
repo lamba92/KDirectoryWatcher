@@ -1,13 +1,14 @@
 package it.lamba.utils
 
+import io.reactivex.Observable
 import kotlinx.coroutines.*
 
 import kotlinx.coroutines.Dispatchers.IO
 import java.nio.file.*
 import java.nio.file.StandardWatchEventKinds.*
-import java.util.HashMap
+import java.util.*
 
-class KDirectoryWatcher(build: Configuration.() -> Unit) {
+class DirectoryWatcher(build: Configuration.() -> Unit) {
 
     private val config = Configuration().apply(build)
     private val watchService by lazy { FileSystems.getDefault().newWatchService()!! }
