@@ -1,19 +1,17 @@
 package it.lamba.utils
 
-import io.reactivex.Observable
 import kotlinx.coroutines.*
 
 import kotlinx.coroutines.Dispatchers.IO
+import mu.KotlinLogging
 import java.nio.file.*
 import java.nio.file.StandardWatchEventKinds.*
 import java.util.*
 
-class DirectoryWatcher(build: Configuration.() -> Unit) {
+class DirectoryWatcher(private val config: Configuration) : AbstractCoroutineWorker(IO) {
 
-    private val config = Configuration().apply(build)
     private val watchService by lazy { FileSystems.getDefault().newWatchService()!! }
     private val watchKeyToDirectoryMap by lazy { HashMap<WatchKey, Path>() }
-    private lateinit var mainJob: Job
     private val eventMap
             by lazy {
                 HashMap<WatchEvent.Kind<Path>, Event>().apply {
@@ -22,7 +20,7 @@ class DirectoryWatcher(build: Configuration.() -> Unit) {
                     put(ENTRY_DELETE, Event.ENTRY_DELETE)
                 }
             }
-    private val delayMap = HashMap<String, Job>()
+    private val delayMap = HashMap<Pair<String, Event>, Job>()
     private val maintenanceJob: Job = GlobalScope.launch {
         while (isActive) {
             delay(10000)
@@ -33,72 +31,85 @@ class DirectoryWatcher(build: Configuration.() -> Unit) {
         }
     }
 
-    fun start() {
-        mainJob = GlobalScope.launch(IO) {
-
-            if (config.preExistingAsCreated)
-                config.pathsToWatch.forEach { rootPath ->
-                    rootPath.toFile()
-                        .walkTopDown()
-                        .map { it.toPath() }
-                        .filter { filePath -> config.isMatchingAllFilters(filePath) }
-                        .forEach { filePath -> launch {
-                            config.notifyListeners(Event.ENTRY_CREATE, filePath)
-                        } }
-                }
-
-            config.pathsToWatch.forEach {
-                val key = it.register(
-                    watchService,
-                    StandardWatchEventKinds.ENTRY_CREATE,
-                    StandardWatchEventKinds.ENTRY_MODIFY,
-                    StandardWatchEventKinds.ENTRY_DELETE
-                )
-                watchKeyToDirectoryMap[key] = it
+    override fun preStartExecution() {
+        if (config.preExistingAsCreated)
+            config.pathsToWatch.forEach { rootPath ->
+                rootPath.toFile()
+                    .walkTopDown()
+                    .map { it.toPath() }
+                    .filter { filePath -> config.isMatchingAllFilters(filePath) }
+                    .forEach { filePath -> GlobalScope.launch {
+                        config.notifyListeners(Event.ENTRY_CREATE, filePath)
+                    } }
             }
-            while (isActive) {
-                val key = watchService.take()
-                val dir = watchKeyToDirectoryMap[key] ?: continue
 
-                for (event in key.pollEvents()) {
-                    if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
-                        break
-                    }
+        config.pathsToWatch.forEach {
+            logger.debug { "Registering $it" }
+            val key = it.register(
+                watchService,
+                StandardWatchEventKinds.ENTRY_CREATE,
+                StandardWatchEventKinds.ENTRY_MODIFY,
+                StandardWatchEventKinds.ENTRY_DELETE
+            )
+            watchKeyToDirectoryMap[key] = it
+        }
+    }
 
-                    @Suppress("UNCHECKED_CAST")
-                    val pathEvent = event as WatchEvent<Path>
+    override suspend fun execute() {
+        val key = watchService.take()
+        val dir = watchKeyToDirectoryMap[key] ?: return
 
-                    val eventType = eventMap[pathEvent.kind()]
+        for (event in key.pollEvents()) {
+            if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                break
+            }
 
-                    val path = dir.resolve(pathEvent.context())
-                    if (config.isMatchingAllFilters(path) && eventType != null) {
-                        if (eventType == Event.ENTRY_MODIFY) {
-                            delayMap[path.toString()]?.cancel()
-                            delayMap[path.toString()] = launch {
+            @Suppress("UNCHECKED_CAST")
+            val pathEvent = event as WatchEvent<Path>
+
+            val eventType = eventMap[pathEvent.kind()]
+
+            val path = dir.resolve(pathEvent.context())
+            if (config.isMatchingAllFilters(path) && eventType != null) {
+                logger.debug { "NEW EVENT $eventType" }
+                if (eventType == Event.ENTRY_MODIFY) {
+                    val possibleEventKey = Pair(path.toString(), Event.ENTRY_CREATE)
+                    if(delayMap.containsKey(possibleEventKey) && delayMap[possibleEventKey]!!.isActive){
+                        logger.debug { "ITS CREATION EVENT HAS NOT YET BEEN TRIGGERED" }
+                        delayMap[possibleEventKey]?.cancel()
+                        delayMap[possibleEventKey] = GlobalScope.launch {
+                            delay(config.delayTime)
+                            if (isActive)
+                                config.notifyListeners(Event.ENTRY_CREATE, path)
+                        }
+                    } else {
+                        val currentEventKey = Pair(path.toString(), Event.ENTRY_MODIFY)
+                        if(delayMap.containsKey(currentEventKey) && delayMap[currentEventKey]!!.isActive){
+                            logger.debug { "NO ACTIVE CREATION EVENT IN QUEUE FOUND, CREATING MODIFY_EVENT" }
+                            delayMap[possibleEventKey]?.cancel()
+                            delayMap[possibleEventKey] = GlobalScope.launch {
                                 delay(config.delayTime)
                                 if (isActive)
-                                    config.notifyListeners(eventType, path)
+                                    config.notifyListeners(Event.ENTRY_MODIFY, path)
                             }
-                        } else
-                            launch { config.notifyListeners(eventType, path) }
-                    }
-                    if (!key.reset()) {
-                        watchKeyToDirectoryMap.remove(key)
-                        if (watchKeyToDirectoryMap.isEmpty()) {
-                            break
                         }
                     }
+                } else
+                    GlobalScope.launch { config.notifyListeners(eventType, path) }
+            }
+            if (!key.reset()) {
+                watchKeyToDirectoryMap.remove(key)
+                if (watchKeyToDirectoryMap.isEmpty()) {
+                    break
                 }
             }
         }
     }
 
-    fun stop() = runBlocking {
-        mainJob.cancel()
+    override fun preCancellationExecution() {
         watchService.close()
         maintenanceJob.cancel()
         delayMap.clear()
-        mainJob.join()
     }
 
     interface Listener {
@@ -111,7 +122,7 @@ class DirectoryWatcher(build: Configuration.() -> Unit) {
         ENTRY_DELETE
     }
 
-    inner class Configuration {
+    class Configuration {
 
         internal val pathsToWatch = HashSet<Path>()
         private val filters = HashSet<(Path) -> Boolean>()
@@ -139,3 +150,7 @@ class DirectoryWatcher(build: Configuration.() -> Unit) {
 }
 
 fun String.toPath() = Paths.get(this)!!
+
+@Suppress("FunctionName")
+fun DirectoryWatcher(builder: DirectoryWatcher.Configuration.() -> Unit)
+        = DirectoryWatcher(DirectoryWatcher.Configuration().apply(builder))

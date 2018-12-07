@@ -10,11 +10,15 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    maven(url = "https://jitpack.io")
 }
 
 dependencies {
-    compile("org.jetbrains.kotlinx","kotlinx-coroutines-core","1.0.1")
     compile(kotlin("stdlib-jdk8"))
+    compile("org.jetbrains.kotlinx","kotlinx-coroutines-core","1.0.1")
+    compile("com.github.lamba92", "KCoroutineWorker", "1.1")
+    compile("io.github.microutils","kotlin-logging", "1.6.22")
+    compile("ch.qos.logback","logback-classic","1.1.7")
     testCompile(kotlin("test-junit"))
 }
 
